@@ -70,7 +70,7 @@ def describe_slice(
 def get_example_slices(
     diagnosis_df: pd.DataFrame,
 ) -> dict[str, pd.Series]:
-    """Get one representative slice for each classification class."""
+    """Get one example slice for each classification class."""
     return {
         "ICH": diagnosis_df[diagnosis_df["ICH"] == 1].iloc[0],
         "Non-ICH": diagnosis_df[diagnosis_df["ICH"] == 0].iloc[0],

@@ -1,4 +1,6 @@
+import numpy as np
 import pandas as pd
+import torch
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from torchvision import transforms
 
@@ -65,13 +67,44 @@ def create_stratified_folds(
     return folds
 
 
+class AddGaussianNoise:
+    """Add mild additive Gaussian noise to emulate scanner acquisition noise.
+
+    Applied AFTER ToTensor() (i.e. on the normalized tensor), so `std` is in
+    normalized-intensity units, not raw pixel/HU units. Kept small and
+    zero-mean so it doesn't shift the mean intensity that carries the
+    hemorrhage (hyperdensity) signal -- it only adds realistic per-pixel
+    noise variation around it.
+    """
+
+    def __init__(self, mean: float = 0.0, std: float = 0.02):
+        self.mean = mean
+        self.std = std
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        noise = torch.randn_like(tensor) * self.std + self.mean
+        return tensor + noise
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(mean={self.mean}, std={self.std})"
+
+
 def get_train_transforms():
-    """Return preprocessing and augmentation transforms for training."""
+    """Return preprocessing and CT-specific training augmentations.
+
+    - HorizontalFlip: brain anatomy is approximately left-right symmetric.
+    - Rotation(8°): realistic mild head-position variation.
+    - Affine translation(5%): mild positional variation without changing intensity.
+    - No ColorJitter: CT intensity carries tissue-density information.
+    - No ResizedCrop/vertical flip: avoids removing small hemorrhages or
+    violating anatomical orientation.
+    - GaussianNoise(std=0.02): mild scanner-noise augmentation after normalization.
+    """
     return transforms.Compose(
         [
             transforms.Resize((224, 224)),
             transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomRotation(degrees=5),
+            transforms.RandomRotation(degrees=8),
             transforms.RandomAffine(
                 degrees=0,
                 translate=(0.05, 0.05),
@@ -82,6 +115,7 @@ def get_train_transforms():
                 mean=IMAGENET_MEAN,
                 std=IMAGENET_STD,
             ),
+            AddGaussianNoise(mean=0.0, std=0.02),
         ]
     )
 
@@ -99,3 +133,17 @@ def get_eval_transforms():
             ),
         ]
     )
+
+
+def compute_class_weights(labels, num_classes=2):
+    """Compute inverse-frequency class weights for a classification loss."""
+    labels = np.asarray(labels)
+
+    counts = np.bincount(labels, minlength=num_classes)
+
+    if np.any(counts == 0):
+        raise ValueError("All classes must have at least one sample.")
+
+    weights = len(labels) / (num_classes * counts)
+
+    return torch.tensor(weights, dtype=torch.float32)
