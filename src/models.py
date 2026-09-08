@@ -21,6 +21,9 @@ def create_resnet18(num_classes: int = 2) -> nn.Module:
     for param in model.layer3.parameters():
         param.requires_grad = False
     
-    model.fc = nn.Linear(model.fc.in_features, num_classes)
+    model.fc = nn.Sequential(
+        nn.Dropout(p=0.3),
+        nn.Linear(model.fc.in_features, num_classes),
+    )
 
     return model
