@@ -157,16 +157,35 @@ def validate_one_epoch(
 def train_model(
     model,
     train_loader,
-    validation_loader,
-    criterion,
-    optimizer,
-    scheduler,
-    device,
+    validation_loader=None,
+    criterion=None,
+    optimizer=None,
+    scheduler=None,
+    device=None,
     num_epochs=30,
     patience=5,
     checkpoint_metric="f1",
 ):
-    """Train a model with learning-rate scheduling and early stopping."""
+    """Train a model with optional validation, scheduling, and early stopping."""
+
+    use_validation = validation_loader is not None
+
+    if use_validation:
+        if scheduler is None:
+            raise ValueError(
+                "scheduler must be provided when validation_loader is not None."
+            )
+
+        if patience is None:
+            raise ValueError(
+                "patience must be provided when validation_loader is not None."
+            )
+
+        if checkpoint_metric is None:
+            raise ValueError(
+                "checkpoint_metric must be provided when validation_loader is not None."
+            )
+
     best_val_metric = float("-inf")
     best_model_state = None
     best_validation_predictions = None
@@ -177,12 +196,12 @@ def train_model(
 
     history = {
         "train_loss": [],
-        "validation_loss": [],
         "train_accuracy": [],
         "train_f1": [],
         "train_sensitivity": [],
         "train_specificity": [],
         "train_auroc": [],
+        "validation_loss": [],
         "accuracy": [],
         "f1": [],
         "sensitivity": [],
@@ -199,15 +218,7 @@ def train_model(
             device,
         )
 
-        validation_metrics = validate_one_epoch(
-            model,
-            validation_loader,
-            criterion,
-            device,
-        )
-
         train_loss = train_metrics["loss"]
-        validation_loss = validation_metrics["loss"]
 
         # Store training history
         history["train_loss"].append(train_loss)
@@ -217,64 +228,96 @@ def train_model(
         history["train_specificity"].append(train_metrics["specificity"])
         history["train_auroc"].append(train_metrics["auroc"])
 
-        # Store validation history
-        history["validation_loss"].append(validation_loss)
-        history["accuracy"].append(validation_metrics["accuracy"])
-        history["f1"].append(validation_metrics["f1"])
-        history["sensitivity"].append(validation_metrics["sensitivity"])
-        history["specificity"].append(validation_metrics["specificity"])
-        history["auroc"].append(validation_metrics["auroc"])
-
         # Save model state for this epoch
         epoch_states[epoch + 1] = deepcopy(model.state_dict())
 
-        current_metric = validation_metrics[checkpoint_metric]
-
-        if current_metric > best_val_metric:
-            best_val_metric = current_metric
-            best_model_state = deepcopy(model.state_dict())
-
-            best_validation_predictions = {
-                "labels": validation_metrics["labels"],
-                "probabilities": validation_metrics["probabilities"],
-                "logits": validation_metrics["logits"],
-            }
-
-            best_epoch = epoch + 1
-            epochs_without_improvement = 0
-        else:
-            epochs_without_improvement += 1
-
-        scheduler.step(validation_loss)
-
-        current_lr = optimizer.param_groups[0]["lr"]
-
-        print(
-            f"Epoch {epoch + 1:02d}/{num_epochs} | "
-            f"Train Loss: {train_loss:.4f} | "
-            f"Train F1: {train_metrics['f1']:.4f} | "
-            f"Val Loss: {validation_loss:.4f} | "
-            f"Val F1: {validation_metrics['f1']:.4f} | "
-            f"Val Sensitivity: "
-            f"{validation_metrics['sensitivity']:.4f} | "
-            f"Val Specificity: "
-            f"{validation_metrics['specificity']:.4f} | "
-            f"Val AUROC: {validation_metrics['auroc']:.4f} | "
-            f"LR: {current_lr:.2e}"
-        )
-
-        if epochs_without_improvement >= patience:
-            print(
-                f"Early stopping. Best epoch: {best_epoch} "
-                f"({checkpoint_metric}="
-                f"{best_val_metric:.4f})"
+        if use_validation:
+            validation_metrics = validate_one_epoch(
+                model,
+                validation_loader,
+                criterion,
+                device,
             )
-            break
 
-    if best_model_state is not None:
+            validation_loss = validation_metrics["loss"]
+
+            # Store validation history
+            history["validation_loss"].append(validation_loss)
+            history["accuracy"].append(validation_metrics["accuracy"])
+            history["f1"].append(validation_metrics["f1"])
+            history["sensitivity"].append(validation_metrics["sensitivity"])
+            history["specificity"].append(validation_metrics["specificity"])
+            history["auroc"].append(validation_metrics["auroc"])
+
+            current_metric = validation_metrics[checkpoint_metric]
+
+            if current_metric > best_val_metric:
+                best_val_metric = current_metric
+                best_model_state = deepcopy(model.state_dict())
+
+                best_validation_predictions = {
+                    "labels": validation_metrics["labels"],
+                    "probabilities": validation_metrics["probabilities"],
+                    "logits": validation_metrics["logits"],
+                }
+
+                best_epoch = epoch + 1
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+
+            scheduler.step(validation_loss)
+
+            current_lr = optimizer.param_groups[0]["lr"]
+
+            print(
+                f"Epoch {epoch + 1:02d}/{num_epochs} | "
+                f"Train Loss: {train_loss:.4f} | "
+                f"Train F1: {train_metrics['f1']:.4f} | "
+                f"Val Loss: {validation_loss:.4f} | "
+                f"Val F1: {validation_metrics['f1']:.4f} | "
+                f"Val Sensitivity: "
+                f"{validation_metrics['sensitivity']:.4f} | "
+                f"Val Specificity: "
+                f"{validation_metrics['specificity']:.4f} | "
+                f"Val AUROC: {validation_metrics['auroc']:.4f} | "
+                f"LR: {current_lr:.2e}"
+            )
+
+            if epochs_without_improvement >= patience:
+                print(
+                    f"Early stopping. Best epoch: {best_epoch} "
+                    f"({checkpoint_metric}="
+                    f"{best_val_metric:.4f})"
+                )
+                break
+
+        else:
+            # Final training: no validation, no early stopping.
+            current_lr = optimizer.param_groups[0]["lr"]
+
+            print(
+                f"Epoch {epoch + 1:02d}/{num_epochs} | "
+                f"Train Loss: {train_loss:.4f} | "
+                f"Train F1: {train_metrics['f1']:.4f} | "
+                f"Train Sensitivity: "
+                f"{train_metrics['sensitivity']:.4f} | "
+                f"Train Specificity: "
+                f"{train_metrics['specificity']:.4f} | "
+                f"Train AUROC: {train_metrics['auroc']:.4f} | "
+                f"LR: {current_lr:.2e}"
+            )
+
+    if use_validation:
+        # Restore the best validation checkpoint.
+        if best_model_state is None:
+            raise RuntimeError("No best checkpoint was captured during training.")
+
         model.load_state_dict(best_model_state)
+
     else:
-        raise RuntimeError("No best checkpoint was captured during training.")
+        # No validation means the final epoch is the final model.
+        best_epoch = num_epochs
 
     return (
         model,
@@ -283,3 +326,42 @@ def train_model(
         epoch_states,
         best_epoch,
     )
+
+
+@torch.no_grad()
+def evaluate_model(
+    model,
+    data_loader,
+    device,
+):
+    """Evaluate a model and return predictions and classification metrics."""
+    model.eval()
+
+    all_labels = []
+    all_predictions = []
+    all_probabilities = []
+
+    for images, labels in data_loader:
+        images = images.to(device)
+
+        outputs = model(images)
+
+        probabilities = torch.softmax(outputs, dim=1)[:, 1]
+        predictions = outputs.argmax(dim=1)
+
+        all_labels.extend(labels.numpy())
+        all_predictions.extend(predictions.cpu().numpy())
+        all_probabilities.extend(probabilities.cpu().numpy())
+
+    metrics = _compute_classification_metrics(
+        all_labels,
+        all_predictions,
+        all_probabilities,
+    )
+
+    return {
+        "metrics": metrics,
+        "labels": all_labels,
+        "predictions": all_predictions,
+        "probabilities": all_probabilities,
+    }

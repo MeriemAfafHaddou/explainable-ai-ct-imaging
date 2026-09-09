@@ -42,10 +42,6 @@ def mc_dropout_predict(
     }
 
 
-from src.uncertainty import mc_dropout_predict
-import torch
-
-
 def collect_uncertainty_predictions(
     model,
     data_loader,
