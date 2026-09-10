@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 
@@ -64,15 +65,9 @@ def collect_uncertainty_predictions(
         )
 
         all_labels.extend(labels.numpy())
-        all_probabilities.extend(
-            results["probabilities"].cpu().numpy()
-        )
-        all_uncertainties.extend(
-            results["uncertainty"].cpu().numpy()
-        )
-        all_predictions.extend(
-            results["predictions"].cpu().numpy()
-        )
+        all_probabilities.extend(results["probabilities"].cpu().numpy())
+        all_uncertainties.extend(results["uncertainty"].cpu().numpy())
+        all_predictions.extend(results["predictions"].cpu().numpy())
 
     return {
         "labels": all_labels,
@@ -80,3 +75,32 @@ def collect_uncertainty_predictions(
         "uncertainties": all_uncertainties,
         "predictions": all_predictions,
     }
+
+
+def expected_calibration_error(labels, probabilities, n_bins=10):
+    predictions = (probabilities >= 0.5).astype(int)
+
+    confidence = np.where(
+        predictions == 1,
+        probabilities,
+        1 - probabilities,
+    )
+
+    correctness = (predictions == labels).astype(float)
+
+    bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+    ece = 0.0
+
+    for lower, upper in zip(bin_edges[:-1], bin_edges[1:]):
+        in_bin = (confidence > lower) & (confidence <= upper)
+
+        if np.any(in_bin):
+            accuracy = correctness[in_bin].mean()
+            mean_confidence = confidence[in_bin].mean()
+            bin_size = in_bin.sum()
+
+            ece += (
+                bin_size / len(labels)
+            ) * abs(accuracy - mean_confidence)
+
+    return ece

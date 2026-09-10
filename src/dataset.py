@@ -43,3 +43,31 @@ class CTICHImageDataset(Dataset):
             image = self.transform(image)
 
         return image, torch.tensor(label, dtype=torch.long)
+
+
+class CTDiffusionDataset(Dataset):
+    def __init__(self, diagnosis_df, data_dir, transform=None):
+        self.diagnosis_df = diagnosis_df.reset_index(drop=True)
+        self.data_dir = data_dir
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.diagnosis_df)
+
+    def __getitem__(self, idx):
+        row = self.diagnosis_df.iloc[idx]
+
+        patient_id = int(row["PatientNumber"])
+        slice_number = int(row["SliceNumber"])
+
+        image = load_ct_image(
+            self.data_dir,
+            patient_id=patient_id,
+            slice_number=slice_number,
+            window="brain",
+        )
+
+        if self.transform:
+            image = self.transform(image)
+
+        return image
