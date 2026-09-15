@@ -104,3 +104,55 @@ def expected_calibration_error(labels, probabilities, n_bins=10):
             ) * abs(accuracy - mean_confidence)
 
     return ece
+
+
+# --------------------------------------------------
+# Temperature Scaling
+# --------------------------------------------------
+
+class TemperatureScaler(torch.nn.Module):
+    """Learn a single temperature for post-hoc calibration."""
+
+    def __init__(self):
+        super().__init__()
+        self.temperature = torch.nn.Parameter(
+            torch.ones(1)
+        )
+
+    def forward(self, logits):
+        return logits / self.temperature
+
+
+def fit_temperature(
+    logits,
+    labels,
+):
+    """Learn the temperature using validation logits and labels."""
+
+    scaler = TemperatureScaler()
+
+    criterion = torch.nn.CrossEntropyLoss()
+
+    optimizer = torch.optim.LBFGS(
+        scaler.parameters(),
+        lr=0.01,
+        max_iter=50,
+    )
+
+    def closure():
+        optimizer.zero_grad()
+
+        scaled_logits = scaler(logits)
+
+        loss = criterion(
+            scaled_logits,
+            labels,
+        )
+
+        loss.backward()
+
+        return loss
+
+    optimizer.step(closure)
+
+    return scaler.temperature.item()

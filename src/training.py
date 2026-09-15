@@ -333,6 +333,7 @@ def evaluate_model(
     model,
     data_loader,
     device,
+    threshold=0.5,
 ):
     """Evaluate a model and return predictions and classification metrics."""
     model.eval()
@@ -347,7 +348,7 @@ def evaluate_model(
         outputs = model(images)
 
         probabilities = torch.softmax(outputs, dim=1)[:, 1]
-        predictions = outputs.argmax(dim=1)
+        predictions = (probabilities >= threshold).long()
 
         all_labels.extend(labels.numpy())
         all_predictions.extend(predictions.cpu().numpy())
