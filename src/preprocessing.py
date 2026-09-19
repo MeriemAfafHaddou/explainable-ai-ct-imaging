@@ -90,16 +90,7 @@ class AddGaussianNoise:
 
 
 def get_train_transforms():
-    """Return preprocessing and CT-specific training augmentations.
-
-    - HorizontalFlip: brain anatomy is approximately left-right symmetric.
-    - Rotation(8°): realistic mild head-position variation.
-    - Affine translation(5%): mild positional variation without changing intensity.
-    - No ColorJitter: CT intensity carries tissue-density information.
-    - No ResizedCrop/vertical flip: avoids removing small hemorrhages or
-    violating anatomical orientation.
-    - GaussianNoise(std=0.02): mild scanner-noise augmentation after normalization.
-    """
+    """Return preprocessing and CT-specific training augmentations."""
     return transforms.Compose(
         [
             transforms.Resize((224, 224)),
@@ -108,6 +99,10 @@ def get_train_transforms():
             transforms.RandomAffine(
                 degrees=0,
                 translate=(0.05, 0.05),
+            ),
+            transforms.ColorJitter(
+                brightness=0.1,
+                contrast=0.1,
             ),
             transforms.Grayscale(num_output_channels=3),
             transforms.ToTensor(),
