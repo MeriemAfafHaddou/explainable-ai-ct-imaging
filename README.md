@@ -106,8 +106,14 @@ Several challenges were encountered during the project:
 * **Latent-space exploration:** generating meaningful modifications was limited by the autoencoder's ability to preserve subtle pathological features.
 
 
+## Presentation
+
+The project presentation provides a concise overview of the methodology, findings, reliability analysis, explainability experiments, and latent-space exploration.
+
+The presentation is available in the [`presentation/`](presentation/) directory.
+
 ## Future Work
 
-Future work includes investigating stronger generative approaches, particularly **diffusion models**, for higher-fidelity latent and counterfactual exploration. Other directions include multi-class ICH classification, different fine-tuning strategies, larger and more diverse datasets, and evaluation across different CT acquisition conditions.
+Future work includes investigating **larger and multi-center datasets** to assess robustness under domain shift, as well as **better fine-tuning strategies** to improve ICH sensitivity. **Quantitative XAI evaluation** could complement visual inspection, while **higher-fidelity generative models**, particularly diffusion-based approaches, could support more faithful latent-space exploration.
 
-Further validation could include **external datasets and medical domain-expert feedback** to assess the robustness and clinical relevance of model predictions and explanations.
+Further validation could include **independent datasets and clinician feedback** to assess generalization and the practical relevance of model explanations.
